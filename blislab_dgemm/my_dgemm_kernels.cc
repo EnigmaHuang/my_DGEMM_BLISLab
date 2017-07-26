@@ -104,7 +104,7 @@ void compute4x4TileKernel(
 {
 	register double C00, C01, C02, C03, C10, C11, C12, C13,
 					C20, C21, C22, C23, C30, C31, C32, C33,
-					B00, B01, B02, B03, Aij;
+					/*B00, B01, B02, B03,*/ A00, A10, A20, A30;
 	C00 = 0.0; C01 = 0.0; C02 = 0.0; C03 = 0.0;
 	C10 = 0.0; C11 = 0.0; C12 = 0.0; C13 = 0.0;
 	C20 = 0.0; C21 = 0.0; C22 = 0.0; C23 = 0.0;
@@ -112,34 +112,39 @@ void compute4x4TileKernel(
 	
 	for (int i = 0; i < comm_dim; i++)
 	{
+		/*
 		B00 = B[i * ldb];
 		B01 = B[i * ldb + 1];
 		B02 = B[i * ldb + 2];
 		B03 = B[i * ldb + 3];
+		*/
 		
-		Aij = A[i];
-		C00 += Aij * B00;
-		C01 += Aij * B01;
-		C02 += Aij * B02;
-		C03 += Aij * B03;
+		A00 = A[i];
+		A10 = A[lda + i];
+		A20 = A[2 * lda + i];
+		A30 = A[3 * lda + i];
 		
-		Aij = A[lda + i];
-		C10 += Aij * B00;
-		C11 += Aij * B01;
-		C12 += Aij * B02;
-		C13 += Aij * B03;
+		double *B_ptr = B + i * ldb;
 		
-		Aij = A[2 * lda + i];
-		C20 += Aij * B00;
-		C21 += Aij * B01;
-		C22 += Aij * B02;
-		C23 += Aij * B03;
+		C00 += A00 * B_ptr[0];
+		C01 += A00 * B_ptr[1];
+		C02 += A00 * B_ptr[2];
+		C03 += A00 * B_ptr[3];
 		
-		Aij = A[3 * lda + i];
-		C30 += Aij * B00;
-		C31 += Aij * B01;
-		C32 += Aij * B02;
-		C33 += Aij * B03;
+		C10 += A10 * B_ptr[0];
+		C11 += A10 * B_ptr[1];
+		C12 += A10 * B_ptr[2];
+		C13 += A10 * B_ptr[3];
+		
+		C20 += A20 * B_ptr[0];
+		C21 += A20 * B_ptr[1];
+		C22 += A20 * B_ptr[2];
+		C23 += A20 * B_ptr[3];
+		
+		C30 += A30 * B_ptr[0];
+		C31 += A30 * B_ptr[1];
+		C32 += A30 * B_ptr[2];
+		C33 += A30 * B_ptr[3];
 	}
 	
 	double *C_ptr = C;

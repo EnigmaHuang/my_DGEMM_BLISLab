@@ -272,6 +272,132 @@ void dgemm_micro_kernel_8x4_avx_shuffle(DGEMM_MICRO_KERNEL_ARGS)
 	C_ptr[3] += c4.d[3];
 }
 
+void dgemm_micro_kernel_8x4_avx_shuffle_prefetch(DGEMM_MICRO_KERNEL_ARGS)
+{
+	register __m256d C0, C1, C2, C3, C4, C5, C6, C7;
+	register __m256d B0, A0, A1, B1, A2, A3;
+	
+	v4df_t c0, c1, c2, c3, c4, c5, c6, c7;
+	
+	C0 = _mm256_setzero_pd();
+	C1 = _mm256_setzero_pd();
+	C2 = _mm256_setzero_pd();
+	C3 = _mm256_setzero_pd();
+	C4 = _mm256_setzero_pd();
+	C5 = _mm256_setzero_pd();
+	C6 = _mm256_setzero_pd();
+	C7 = _mm256_setzero_pd();
+	
+	B0 = _mm256_load_pd(B_pack);
+	A0 = _mm256_load_pd(A_pack);
+	A1 = _mm256_load_pd(A_pack + 4);
+	
+	for (int k = 0; k < comm_dim; k += 2) // 0-th loop, microkernel
+	{
+		// prefetch for k + 1
+		A2 = _mm256_load_pd(A_pack + (k + 1) * A_pack_rows);
+		
+		// k
+		C0 += A0 * B0;
+		C4 += A1 * B0;
+		
+		// prefetch for k + 1
+		A3 = _mm256_load_pd(A_pack + (k + 1) * A_pack_rows + 4);
+		
+		B0 = _mm256_shuffle_pd(B0, B0, 0x5);
+		C1 += A0 * B0;
+		C5 += A1 * B0;
+		
+		// prefetch for k + 1
+		B1 = _mm256_load_pd(B_pack + (k + 1) * B_pack_cols);
+		
+		B0 = _mm256_permute2f128_pd(B0, B0, 0x1);
+		C2 += A0 * B0;
+		C6 += A1 * B0;
+		
+		B0 = _mm256_shuffle_pd(B0, B0, 0x5);
+		C3 += A0 * B0;
+		C7 += A1 * B0;
+		
+		// k + 1
+		
+		// prefetch for next k
+		A0 = _mm256_load_pd(A_pack + (k + 2) * A_pack_rows);
+		
+		C0 += A2 * B1;
+		C4 += A3 * B1;
+		
+		B1 = _mm256_shuffle_pd(B1, B1, 0x5);
+		C1 += A2 * B1;
+		C5 += A3 * B1;
+		
+		// prefetch for next k
+		A1 = _mm256_load_pd(A_pack + (k + 2) * A_pack_rows + 4);
+		
+		B1 = _mm256_permute2f128_pd(B1, B1, 0x1);
+		C2 += A2 * B1;
+		C6 += A3 * B1;
+		
+		// prefetch for next k
+		B0 = _mm256_load_pd(B_pack + (k + 2) * B_pack_cols);
+		
+		B1 = _mm256_shuffle_pd(B1, B1, 0x5);
+		C3 += A2 * B1;
+		C7 += A3 * B1;
+	}
+	
+	c0.v = C0; c1.v = C1; c2.v = C2; c3.v = C3;
+	c4.v = C4; c5.v = C5; c6.v = C6; c7.v = C7;
+	
+	double *C_ptr = C;
+	C_ptr[0] += c0.d[0];
+	C_ptr[1] += c1.d[0];
+	C_ptr[2] += c3.d[0];
+	C_ptr[3] += c2.d[0];
+	
+	C_ptr = C + ldc;
+	C_ptr[0] += c1.d[1];
+	C_ptr[1] += c0.d[1];
+	C_ptr[2] += c2.d[1];
+	C_ptr[3] += c3.d[1];
+	
+	C_ptr = C + ldc * 2;
+	C_ptr[0] += c3.d[2];
+	C_ptr[1] += c2.d[2];
+	C_ptr[2] += c0.d[2];
+	C_ptr[3] += c1.d[2];
+	
+	C_ptr = C + ldc * 3;
+	C_ptr[0] += c2.d[3];
+	C_ptr[1] += c3.d[3];
+	C_ptr[2] += c1.d[3];
+	C_ptr[3] += c0.d[3];
+	
+	C_ptr = C + ldc * 4;
+	C_ptr[0] += c4.d[0];
+	C_ptr[1] += c5.d[0];
+	C_ptr[2] += c7.d[0];
+	C_ptr[3] += c6.d[0];
+	
+	C_ptr = C + ldc * 5;
+	C_ptr[0] += c5.d[1];
+	C_ptr[1] += c4.d[1];
+	C_ptr[2] += c6.d[1];
+	C_ptr[3] += c7.d[1];
+	
+	C_ptr = C + ldc * 6;
+	C_ptr[0] += c7.d[2];
+	C_ptr[1] += c6.d[2];
+	C_ptr[2] += c4.d[2];
+	C_ptr[3] += c5.d[2];
+	
+	C_ptr = C + ldc * 7;
+	C_ptr[0] += c6.d[3];
+	C_ptr[1] += c7.d[3];
+	C_ptr[2] += c5.d[3];
+	C_ptr[3] += c4.d[3];
+}
+
 void dgemm_marco_kernel2(
 	const int &block_c_rows, const int &block_c_cols, const int &block_comm_dim,
 	double *packed_A, double *packed_B, double *C, const int &ldc
@@ -287,7 +413,7 @@ void dgemm_marco_kernel2(
 			int curr_A_pack_rows = MIN(DGEMM_MR, block_c_rows - i);
 			double *curr_A_pack = packed_A + i * block_comm_dim;
 
-			dgemm_micro_kernel_8x4_avx_shuffle(
+			dgemm_micro_kernel_8x4_avx_shuffle_prefetch(
 				curr_A_pack, curr_A_pack_rows,
 				curr_B_pack, curr_B_pack_cols,
 				block_comm_dim, C + i * ldc + j, ldc
